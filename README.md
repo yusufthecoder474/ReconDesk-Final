@@ -14,6 +14,7 @@ Record invoices, track payments, review explainable matching suggestions, confir
 ![Flask](https://img.shields.io/badge/Flask-3.1-333333?logo=flask&logoColor=white)
 ![Database](https://img.shields.io/badge/Database-SQLite%20%7C%20MySQL-4479A1?logo=mysql&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
+[![ReconDesk CI](https://github.com/yusufthecoder474/ReconDesk-Final/actions/workflows/ci.yml/badge.svg)](https://github.com/yusufthecoder474/ReconDesk-Final/actions/workflows/ci.yml)
 
 **[Features](#features) · [Screenshots](#application-screenshots) · [Installation](#run-locally-without-docker) · [Testing](#testing-and-verified-results) · [Architecture](#system-architecture)**
 
@@ -289,31 +290,21 @@ $env:MATCHER_SHARED_TOKEN="local-demo-token"
 .\.venv\Scripts\python.exe -m pytest -q -rs
 ```
 
-### Observed results
+### Verified results (November 5, 2026)
 
-| Check | Result |
+| Check | Verified result |
 |---|---|
-| Python dependencies | Installed successfully |
-| Django system checks | Passed |
-| SQLite migrations | Passed |
-| Django web server | Running on port 8081 |
-| Flask matching service | Integrated successfully |
-| Invoice and payment creation | Demonstrated |
-| Single payment allocation | Demonstrated |
-| Multiple payments against one invoice | Demonstrated |
-| CSV reporting | Arithmetic verified |
-| Automated tests | 43 passed, 0 failed, 1 skipped |
-| MySQL/InnoDB concurrency | Not yet verified |
-| GitHub Actions execution | Not yet verified |
-| Production deployment | Not performed |
+| Windows 11 / Python 3.12 / SQLite | Django and Flask started without Docker; login, invoice creation, payment recording and reconciliation demonstrated |
+| Local Pytest | **43 passed, 1 skipped, 0 failed** (MySQL-only lock test skipped) |
+| GitHub Actions SQLite job | **43 passed, 1 deselected**; Ruff, Django checks and migrations passed |
+| GitHub Actions MySQL 8.4 job | **44 passed, 0 failed**; includes InnoDB-specific concurrency test |
+| Financial reconciliation / CSV | Four synthetic invoices: ₹14,300 invoiced, ₹6,000 allocated, ₹8,300 outstanding |
+| GitHub Actions pipeline | **Both jobs passed** on commit `755547df` |
+| Production deployment and security review | Not performed |
 
-### Why one test was skipped
+**[Inspect successful CI run #2](https://github.com/yusufthecoder474/ReconDesk-Final/actions/runs/42074401700)** · [CI workflow](.github/workflows/ci.yml)
 
-The skipped test requires MySQL/InnoDB row-level locking.
-
-SQLite does not provide equivalent `SELECT FOR UPDATE` behavior, so the test cannot be verified using the local SQLite setup.
-
-The MySQL-specific test should be executed against MySQL 8.4.
+The SQLite suite deliberately excludes the MySQL-only concurrency test because SQLite does not implement equivalent `SELECT FOR UPDATE` locking. That test **passed under MySQL 8.4 on GitHub Actions**. CI results validate the tested scenarios, not production readiness or performance at scale.
 
 ## Agile and SDLC
 
@@ -383,7 +374,7 @@ ReconDesk/
 
 ## Known limitations
 
-- SQLite tests do not establish MySQL transaction or concurrency safety.
+- SQLite alone cannot establish MySQL transaction safety; an InnoDB-specific concurrency test passed in CI, but broader multi-user and production-load testing has not been performed.
 - Matching rules may suggest incorrect records when references are misleading.
 - Staff must review suggestions before confirming allocations.
 - The application does not integrate with real bank accounts.
