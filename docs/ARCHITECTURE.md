@@ -1,0 +1,2 @@
+# Architecture and decisions
+Django is the system of record; Flask is a stateless, separately testable matching service. It receives only structured records, uses a shared internal token, and returns suggestions. MySQL InnoDB holds transaction state. No external message queue, cloud account, or ML model. This separation demonstrates two frameworks but introduces a network dependency. A single Django service would be simpler for a real small-business deployment.

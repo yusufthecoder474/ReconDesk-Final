@@ -1,0 +1,5 @@
+{% extends 'core/base.html' %}{% block content %}
+<h1>{{ heading|default:"Edit invoice" }}</h1>
+<p>After payment allocation, an invoice is finalized and can no longer be edited.</p>
+<form method="post" class="card p-3">{% csrf_token %}{{ form.as_p }}<div><button class="btn btn-primary">Save changes</button><a class="btn btn-outline-secondary" href="{% url 'invoices' %}">Cancel</a></div></form>
+{% endblock %}

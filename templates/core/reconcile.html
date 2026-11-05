@@ -1,0 +1,13 @@
+{% extends 'core/base.html' %}{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3"><div><h1>Invoice–payment reconciliation</h1><p class="text-muted">Suggestions never move money until staff confirms them. Duplicates and ambiguous records require investigation.</p></div>
+{% if user.is_staff %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="run"><button class="btn btn-primary">Run matching</button></form>{% endif %}
+</div>
+<div class="table-responsive"><table class="table table-striped"><thead><tr><th>Run</th><th>Payment</th><th>Invoice</th><th>Reason</th><th>Suggested amount</th><th>Status</th><th>Review</th></tr></thead><tbody>
+{% for s in suggestions %}<tr><td>{{ s.run_id }}</td><td>{{ s.payment.reference }}</td><td>{{ s.invoice.number|default:'No safe match' }}</td><td><code>{{ s.reason }}</code></td><td>₹{{ s.suggested_amount }}</td><td>{{ s.status }}</td>
+<td>{% if user.is_staff and s.status == 'review' %}
+{% if s.invoice and s.suggested_amount > 0 %}<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="approve"><input type="hidden" name="suggestion_id" value="{{ s.id }}"><button class="btn btn-sm btn-success">Confirm</button></form>{% endif %}
+<form method="post" class="d-inline">{% csrf_token %}<input type="hidden" name="action" value="reject"><input type="hidden" name="suggestion_id" value="{{ s.id }}"><button class="btn btn-sm btn-outline-danger">Reject</button></form>
+{% endif %}</td></tr>
+{% empty %}<tr><td colspan="7" class="text-muted">No suggestions yet. Staff can run matching above.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,3 @@
+-r requirements-windows.txt
+# Local MySQL Community Server is installed independently from the app.
+mysqlclient>=2.2,<2.3

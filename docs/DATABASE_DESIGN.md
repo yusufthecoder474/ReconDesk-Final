@@ -1,0 +1,2 @@
+# Database design
+Customer 1:N Invoice; Customer 1:N Payment. Invoice N:M Payment through PaymentAllocation with a unique invoice/payment pair. ReconciliationRun 1:N ReconciliationSuggestion. AuditEvent captures confirmed allocations. All money is DECIMAL(14,2). Customer and invoice foreign keys use PROTECT. Payment reference is indexed, intentionally not unique because duplicates are business exceptions. Service-level InnoDB locks guard aggregate allocation amounts.

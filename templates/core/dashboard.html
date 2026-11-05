@@ -1,0 +1,11 @@
+{% extends 'core/base.html' %}{% block content %}
+<div class="d-flex justify-content-between align-items-center"><div><h1>Finance reconciliation overview</h1><p class="text-muted">Synthetic demo data, INR. Totals reflect confirmed allocations only.</p></div><a class="btn btn-primary" href="{% url 'reconcile' %}">Review matches</a></div>
+<div class="row g-3 my-2">
+<div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6 text-muted">Invoice value</h2><p class="fs-3">₹{{ total }}</p></div></div>
+<div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6 text-muted">Payment receipts</h2><p class="fs-3">₹{{ received }}</p></div></div>
+<div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6 text-muted">Confirmed allocations</h2><p class="fs-3">₹{{ reconciled }}</p></div></div>
+<div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6 text-muted">Outstanding invoices</h2><p class="fs-3">₹{{ outstanding }}</p></div></div>
+<div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6 text-muted">Partially paid invoices</h2><p class="fs-3">{{ partial }}</p></div></div>
+<div class="col-md-4"><div class="card p-3 h-100"><h2 class="h6 text-muted">Payments with money to allocate</h2><p class="fs-3">{{ unmatched }}</p></div></div>
+</div>
+{% endblock %}

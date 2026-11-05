@@ -1,0 +1,2 @@
+# User stories
+US-01 As staff, I can record invoices so customer balances are visible (FR-002). US-02 As staff, I can enter bank payments and see potential duplicates (FR-003). US-03 As staff, I can review suggested matches and reasons before posting (FR-004). US-04 As a viewer, I can inspect totals but cannot change financial records (FR-001). US-05 As an auditor, I can export outstanding balances (FR-006).
