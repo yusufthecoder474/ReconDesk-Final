@@ -131,6 +131,48 @@ def resolve_customer(name, email):
     return customer, True
 
 
+def _resolve_customers_batch(mapped_records):
+    """Resolve every customer for a batch in a constant few queries.
+
+    One lookup by email, one by name, one ``bulk_create`` for the
+    missing ones — instead of one or two queries per record. This was
+    the largest remaining query cost in the bulk path (see the
+    benchmark in scripts/benchmark_sync.py). Matching is the same
+    rule as :func:`resolve_customer`: email first, then name.
+    Returns ``(customers, created_count)`` aligned with the input.
+    """
+    pairs = [
+        (m["customer_name"], m["customer_email"]) for m in mapped_records
+    ]
+    emails = [email for _, email in pairs if email]
+    names = [name for name, _ in pairs if name]
+    by_email = {
+        c.email.lower(): c
+        for c in Customer.objects.filter(email__in=emails)
+        if c.email
+    }
+    by_name = {
+        c.name.lower(): c
+        for c in Customer.objects.filter(name__in=names)
+    }
+    to_create = {}
+    resolved = []
+    for name, email in pairs:
+        customer = by_email.get(email.lower()) if email else None
+        if customer is None and name:
+            customer = by_name.get(name.lower())
+        if customer is None:
+            key = (name or "", email or "")
+            if key not in to_create:
+                to_create[key] = Customer(name=name or email, email=email or "")
+            customer = to_create[key]
+        resolved.append(customer)
+    created = list(to_create.values())
+    if created:
+        Customer.objects.bulk_create(created)
+    return resolved, len(created)
+
+
 # -- upserts ----------------------------------------------------------
 
 
@@ -150,17 +192,18 @@ def _fields_differ(obj, values):
     return False
 
 
-def _is_protected(resource, obj):
+def _is_protected(resource, obj, allocated_payment_ids=frozenset()):
     """True if the row must not be changed by a sync.
 
     Finalized invoices and allocated payments are immutable in
     ReconDesk (``core.models`` enforces this in ``save()``); a sync
     that tried to change them would be a data-integrity bug, so the
-    record is skipped and logged instead.
+    record is skipped and logged instead. Allocated ids are passed
+    in as a pre-fetched set (one query per batch), not queried per row.
     """
     if resource == "invoices":
         return obj.finalized
-    return PaymentAllocation.objects.filter(payment_id=obj.pk).exists()
+    return obj.pk in allocated_payment_ids
 
 
 def persist_batch(resource, mapped_records, *, source, use_bulk=True):
@@ -189,15 +232,18 @@ def persist_batch(resource, mapped_records, *, source, use_bulk=True):
             obj.number: obj
             for obj in Invoice.objects.filter(number__in=numbers)
         }
+    allocated_payment_ids = frozenset()
+    if resource == "payments" and existing:
+        allocated_payment_ids = frozenset(
+            PaymentAllocation.objects.filter(
+                payment_id__in=[obj.pk for obj in existing.values()]
+            ).values_list("payment_id", flat=True)
+        )
+    customers, customers_created = _resolve_customers_batch(mapped_records)
+    counts["customers_created"] = customers_created
 
     creates, updates = [], []
-    for mapped in mapped_records:
-        customer, created_customer = resolve_customer(
-            mapped["customer_name"], mapped["customer_email"]
-        )
-        if created_customer:
-            counts.setdefault("customers_created", 0)
-            counts["customers_created"] += 1
+    for mapped, customer in zip(mapped_records, customers):
         obj = existing.get(mapped["external_id"])
         values = {f: mapped[f] for f in fields if f != "customer"}
         values["customer"] = customer
@@ -222,7 +268,7 @@ def persist_batch(resource, mapped_records, *, source, use_bulk=True):
                     f"{mapped['number']} belongs to another invoice"
                 )
                 continue
-        if _is_protected(resource, obj):
+        if _is_protected(resource, obj, allocated_payment_ids):
             if _fields_differ(obj, values):
                 counts["skipped"] += 1
                 skipped_reasons.append(

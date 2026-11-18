@@ -1,0 +1,38 @@
+[
+  {
+    "mode": "per-row",
+    "records": 1000,
+    "created": 1000,
+    "seconds": 1.4,
+    "queries": 3520,
+    "rows_per_second": 714.3,
+    "queries_per_record": 3.52
+  },
+  {
+    "mode": "bulk",
+    "records": 1000,
+    "created": 1000,
+    "seconds": 0.113,
+    "queries": 32,
+    "rows_per_second": 8820.3,
+    "queries_per_record": 0.03
+  },
+  {
+    "mode": "per-row",
+    "records": 10000,
+    "created": 10000,
+    "seconds": 13.935,
+    "queries": 35083,
+    "rows_per_second": 717.6,
+    "queries_per_record": 3.51
+  },
+  {
+    "mode": "bulk",
+    "records": 10000,
+    "created": 10000,
+    "seconds": 1.238,
+    "queries": 203,
+    "rows_per_second": 8075.7,
+    "queries_per_record": 0.02
+  }
+]
