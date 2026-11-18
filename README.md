@@ -199,6 +199,31 @@ The matching process uses deterministic rules and explanation codes. It is not a
 
 Ambiguous and unmatched payments require human investigation.
 
+## SaaS connector layer
+
+ReconDesk can pull invoices and payments from an external API into
+its database, so reconciliation runs on extracted data. The
+connector is a `connectors/` package built around an abstract
+`BaseConnector` (authenticate, fetch page, extract, map, sync),
+with Basic / Bearer / API-key auth from environment variables,
+cursor pagination, 429 + `Retry-After` handling with exponential
+backoff and jitter, an incremental sync cursor stored per
+connector, idempotent upserts on a unique `(source, external_id)`,
+and a database lease so two simultaneous syncs cannot corrupt
+data. The concrete connector talks to a deterministic local mock
+server (`connectors/mock_server.py`) — no real Stripe key or
+account is needed, and the mock can be swapped for Stripe test
+mode by changing the base URL, auth, and mapping. Full design,
+auth (including how OAuth 2.0 would plug in), and measured
+benchmarks: [docs/CONNECTORS.md](docs/CONNECTORS.md).
+
+```bash
+MOCK_API_TOKEN=mock-test-token python -m connectors.mock_server
+# in another shell, with USE_SQLITE=1 and the MOCK_CONNECTOR_* vars set:
+python manage.py sync_connector mock --full   # first run
+python manage.py sync_connector mock          # later runs: incremental only
+```
+
 ## Run locally without Docker
 
 ### Requirements
@@ -306,6 +331,20 @@ $env:MATCHER_SHARED_TOKEN="local-demo-token"
 
 The SQLite suite deliberately excludes the MySQL-only concurrency test because SQLite does not implement equivalent `SELECT FOR UPDATE` locking. That test **passed under MySQL 8.4 on GitHub Actions**. CI results validate the tested scenarios, not production readiness or performance at scale.
 
+### Connector layer — verified 18 November 2026 (this VM, SQLite)
+
+| Check | Measured result |
+|---|---|
+| Pytest, SQLite | **73 passed, 2 deselected** (the 2 MySQL-only tests: allocation concurrency + connector concurrency) — was 43 passed before the connector work |
+| Connector tests | 24 unit (mocked HTTP) + 6 mock-server integration + 1 MySQL concurrency test, all new |
+| Full mock sync | 200 records created (100 invoices + 100 payments, 10 customers); incremental re-run fetched 0; `--full` re-run created 0, skipped 200 (idempotent) |
+| Benchmark, 1,000 records | Per-row 1.400 s / 3,520 queries; bulk 0.113 s / 32 queries — **12.4× faster** |
+| Benchmark, 10,000 records | Per-row 13.935 s / 35,083 queries; bulk 1.238 s / 203 queries — **11.3× faster** |
+| MySQL 8.4 connector concurrency test | **Not run locally** — this VM has no MySQL server and its Docker daemon is not running. It is written to run in the GitHub Actions MySQL 8.4 job; do not claim it passed until that job is green. |
+| Live Stripe / GitHub API call | Not made; the mock server is the only provider exercised. OAuth 2.0 is documented only, not built. |
+
+Benchmark method and the full results table are in [docs/CONNECTORS.md](docs/CONNECTORS.md) and `scripts/benchmark_results.json`.
+
 ## Agile and SDLC
 
 ReconDesk includes documentation for:
@@ -351,11 +390,12 @@ See `EVALUATION_RESULTS.md` and `docs/RESEARCH.md`.
 ReconDesk/
 ├── core/
 ├── config/
+├── connectors/        # SaaS connector layer (see docs/CONNECTORS.md)
 ├── flask_matcher/
 ├── templates/
 ├── static/
 ├── tests/
-├── scripts/
+├── scripts/           # includes benchmark_sync.py + benchmark_results.json
 ├── docs/
 │   └── screenshots/
 │       ├── dashboard.png
