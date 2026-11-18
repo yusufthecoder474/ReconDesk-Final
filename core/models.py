@@ -27,7 +27,22 @@ class Invoice(models.Model):
         max_digits=14, decimal_places=2, validators=[positive_amount]
     )
     finalized = models.BooleanField(default=False)
+    # Connector origin. NULL/NULL means "entered manually in ReconDesk".
+    # A (source, external_id) pair is unique when both are set, so a
+    # re-run of a sync can upsert instead of duplicating the row.
+    # MySQL and SQLite both treat NULLs as distinct in a unique index,
+    # so manual rows (both NULL) are unaffected.
+    source = models.CharField(max_length=40, null=True, blank=True, db_index=True)
+    external_id = models.CharField(max_length=80, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "external_id"],
+                name="unique_source_external_invoice",
+            )
+        ]
 
     def clean(self):
         if self.due_on and self.issued_on and self.due_on < self.issued_on:
@@ -82,7 +97,18 @@ class Payment(models.Model):
     amount = models.DecimalField(
         max_digits=14, decimal_places=2, validators=[positive_amount]
     )
+    # Connector origin; see Invoice.source / external_id.
+    source = models.CharField(max_length=40, null=True, blank=True, db_index=True)
+    external_id = models.CharField(max_length=80, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "external_id"],
+                name="unique_source_external_payment",
+            )
+        ]
 
     def save(self, *args, **kwargs):
         if self.pk and PaymentAllocation.objects.filter(payment_id=self.pk).exists():
