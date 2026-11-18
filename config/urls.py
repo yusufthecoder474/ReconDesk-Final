@@ -32,4 +32,5 @@ urlpatterns = [
     path("reconcile/", views.reconcile_page, name="reconcile"),
     path("reports/export/", views.export_report, name="export"),
     path("api/", include("core.api_urls")),
+    path("api/connectors/", include("connectors.api_urls")),
 ]
