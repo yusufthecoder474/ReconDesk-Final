@@ -193,6 +193,22 @@ customer is created silently. Customers are resolved in bulk per
 page (one email lookup, one name lookup, one `bulk_create`), not
 one query per record.
 
+MySQL caveat, fixed 19 November 2026: MySQL does not return
+primary keys from `bulk_create`, so the objects it returns still
+have `pk=None` (SQLite fills them in, which hid the bug — MySQL
+CI failed 12 tests with `ValueError: bulk_create() prohibited
+... unsaved related object 'customer'`). `_resolve_customers_batch`
+therefore re-queries the saved customers by email after
+`bulk_create` and builds Invoice/Payment rows from the re-fetched
+objects; no PK from a `bulk_create` return value is ever trusted,
+and no `ignore_conflicts` result is used for PKs (there is no
+`ignore_conflicts` call in this repo). A regression test
+(`test_sync_works_when_bulk_create_returns_no_pks`) simulates the
+MySQL behaviour on SQLite by stripping PKs off `bulk_create`
+results, so this class of bug is caught without MySQL. The
+Invoice/Payment `bulk_create` in the same module is unaffected:
+its returned PKs are never used (only the count is).
+
 ## Running it
 
 ```bash
@@ -229,19 +245,23 @@ and DB query count (counted with an `execute_wrapper` — see the
 note below). Both modes share the batched customer resolution, so
 the difference measured is the write path alone.
 
-Measured 2026-11-18 on this VM (SQLite, Python 3.12, single runs;
-a repeat run gave the same query counts and times within 5%).
-Full results: `scripts/benchmark_results.json`.
+Measured 2026-11-19 on this VM (SQLite, Python 3.12, single runs;
+re-run after the MySQL bulk_create fix — the fix adds 2 queries
+per sync that creates customers, the re-fetch; a repeat run gave
+the same query counts and times within 5%). Full results:
+`scripts/benchmark_results.json`. (Pre-fix run, 2026-11-18:
+1k bulk 0.113 s / 32 queries, 10k bulk 1.238 s / 203 queries —
+the fix changed bulk time and query count by less than 2%.)
 
 | Records | Mode | Time | Queries | Rows/s | Queries/record |
 | ---: | --- | ---: | ---: | ---: | ---: |
-| 1,000 | per-row | 1.400 s | 3,520 | 714 | 3.52 |
-| 1,000 | bulk | 0.113 s | 32 | 8,820 | 0.03 |
-| 10,000 | per-row | 13.935 s | 35,083 | 718 | 3.51 |
-| 10,000 | bulk | 1.238 s | 203 | 8,076 | 0.02 |
+| 1,000 | per-row | 1.348 s | 3,522 | 742 | 3.52 |
+| 1,000 | bulk | 0.114 s | 34 | 8,759 | 0.03 |
+| 10,000 | per-row | 13.545 s | 35,085 | 738 | 3.51 |
+| 10,000 | bulk | 1.190 s | 205 | 8,407 | 0.02 |
 
-Bulk is **12.4× faster at 1k records and 11.3× at 10k**, with
-110× / 173× fewer queries. The bottleneck that was optimised is
+Bulk is **11.8× faster at 1k records and 11.4× at 10k**, with
+104× / 171× fewer queries. The bottleneck that was optimised is
 real: per-row `save()` costs ~3.5 queries per record (unique
 validation + insert + related lookups), while bulk mode writes a
 whole page in a handful of `executemany` calls. The batched

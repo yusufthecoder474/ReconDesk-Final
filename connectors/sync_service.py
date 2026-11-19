@@ -131,6 +131,27 @@ def resolve_customer(name, email):
     return customer, True
 
 
+def _fetch_customer_maps(emails, names):
+    """Fetch saved customers keyed by lower-cased email and name."""
+    by_email = {
+        c.email.lower(): c
+        for c in Customer.objects.filter(email__in=emails)
+        if c.email
+    }
+    by_name = {
+        c.name.lower(): c for c in Customer.objects.filter(name__in=names)
+    }
+    return by_email, by_name
+
+
+def _lookup_customer(by_email, by_name, name, email):
+    """Email first, then name — the same rule as resolve_customer."""
+    customer = by_email.get(email.lower()) if email else None
+    if customer is None and name:
+        customer = by_name.get(name.lower())
+    return customer
+
+
 def _resolve_customers_batch(mapped_records):
     """Resolve every customer for a batch in a constant few queries.
 
@@ -140,36 +161,46 @@ def _resolve_customers_batch(mapped_records):
     benchmark in scripts/benchmark_sync.py). Matching is the same
     rule as :func:`resolve_customer`: email first, then name.
     Returns ``(customers, created_count)`` aligned with the input.
+
+    MySQL safety: MySQL does not return primary keys from
+    ``bulk_create``, so the objects it returns still have
+    ``pk=None`` (SQLite fills them in, which hid this bug until
+    MySQL CI failed). Those objects must never be used as the
+    ``customer`` of an Invoice/Payment row — Django raises
+    ``ValueError: bulk_create() prohibited ... unsaved related
+    object 'customer'``. So after ``bulk_create`` this re-queries
+    the saved rows by email (and by name for email-less rows) and
+    rebuilds the resolved list from the re-fetched, saved objects.
+    No primary key is ever trusted from a ``bulk_create`` return
+    value, and no ``ignore_conflicts`` result is used for PKs
+    either (there is no ``ignore_conflicts`` call in this repo).
     """
     pairs = [
         (m["customer_name"], m["customer_email"]) for m in mapped_records
     ]
     emails = [email for _, email in pairs if email]
     names = [name for name, _ in pairs if name]
-    by_email = {
-        c.email.lower(): c
-        for c in Customer.objects.filter(email__in=emails)
-        if c.email
-    }
-    by_name = {
-        c.name.lower(): c
-        for c in Customer.objects.filter(name__in=names)
-    }
+    by_email, by_name = _fetch_customer_maps(emails, names)
     to_create = {}
-    resolved = []
     for name, email in pairs:
-        customer = by_email.get(email.lower()) if email else None
-        if customer is None and name:
-            customer = by_name.get(name.lower())
-        if customer is None:
+        if _lookup_customer(by_email, by_name, name, email) is None:
             key = (name or "", email or "")
             if key not in to_create:
                 to_create[key] = Customer(name=name or email, email=email or "")
-            customer = to_create[key]
-        resolved.append(customer)
     created = list(to_create.values())
     if created:
         Customer.objects.bulk_create(created)
+        # Re-fetch the saved rows; see the MySQL note above. The
+        # objects in ``created`` cannot be trusted for PKs.
+        by_email, by_name = _fetch_customer_maps(emails, names)
+    resolved = []
+    for name, email in pairs:
+        customer = _lookup_customer(by_email, by_name, name, email)
+        if customer is None:
+            # Defensive fallback (e.g. a case-folding mismatch in the
+            # re-fetch): single-row create returns a saved object.
+            customer, _ = resolve_customer(name, email)
+        resolved.append(customer)
     return resolved, len(created)
 
 
@@ -287,6 +318,12 @@ def persist_batch(resource, mapped_records, *, source, use_bulk=True):
 
     if creates:
         if use_bulk:
+            # MySQL safety: the PKs on the objects returned by this
+            # bulk_create are not used anywhere afterwards — only
+            # len(creates) is counted — so MySQL not returning them
+            # is harmless here. (The customer bulk_create above is
+            # the only one whose objects are reused, and it is
+            # re-fetched; see _resolve_customers_batch.)
             try:
                 model.objects.bulk_create(creates, batch_size=BATCH_SIZE)
             except IntegrityError:

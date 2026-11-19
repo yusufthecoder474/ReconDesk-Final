@@ -335,11 +335,12 @@ The SQLite suite deliberately excludes the MySQL-only concurrency test because S
 
 | Check | Measured result |
 |---|---|
-| Pytest, SQLite | **73 passed, 2 deselected** (the 2 MySQL-only tests: allocation concurrency + connector concurrency) — was 43 passed before the connector work |
-| Connector tests | 24 unit (mocked HTTP) + 6 mock-server integration + 1 MySQL concurrency test, all new |
+| Pytest, SQLite | **74 passed, 2 deselected** (the 2 MySQL-only tests: allocation concurrency + connector concurrency) — was 43 passed before the connector work; 73 before the 19 Nov bulk_create fix |
+| Connector tests | 25 unit (mocked HTTP, incl. the bulk_create-no-PKs regression test) + 6 mock-server integration + 1 MySQL concurrency test, all new |
 | Full mock sync | 200 records created (100 invoices + 100 payments, 10 customers); incremental re-run fetched 0; `--full` re-run created 0, skipped 200 (idempotent) |
-| Benchmark, 1,000 records | Per-row 1.400 s / 3,520 queries; bulk 0.113 s / 32 queries — **12.4× faster** |
-| Benchmark, 10,000 records | Per-row 13.935 s / 35,083 queries; bulk 1.238 s / 203 queries — **11.3× faster** |
+| Benchmark, 1,000 records | Per-row 1.348 s / 3,522 queries; bulk 0.114 s / 34 queries — **11.8× faster** (re-run 19 Nov 2026 after the MySQL bulk_create fix; pre-fix: 12.4×) |
+| Benchmark, 10,000 records | Per-row 13.545 s / 35,085 queries; bulk 1.190 s / 205 queries — **11.4× faster** (pre-fix: 11.3×) |
+| MySQL 8.4 CI job, 19 Nov 2026 | **12 failed, 63 passed** on commit `e0babbd`: MySQL does not return PKs from `bulk_create`, so newly created customers had no PK when used for Invoice/Payment rows. Fixed the same day (re-fetch customers by email after `bulk_create`; regression test simulates the MySQL behaviour on SQLite). Re-run of the MySQL job is still pending — do not claim it passed until that job is green. |
 | MySQL 8.4 connector concurrency test | **Not run locally** — this VM has no MySQL server and its Docker daemon is not running. It is written to run in the GitHub Actions MySQL 8.4 job; do not claim it passed until that job is green. |
 | Live Stripe / GitHub API call | Not made; the mock server is the only provider exercised. OAuth 2.0 is documented only, not built. |
 

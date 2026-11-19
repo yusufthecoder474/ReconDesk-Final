@@ -384,6 +384,39 @@ def test_sync_skips_finalized_invoice_instead_of_changing_it(connector):
 
 
 @pytest.mark.django_db
+def test_sync_works_when_bulk_create_returns_no_pks(monkeypatch, connector):
+    """Regression: MySQL does not return PKs from bulk_create.
+
+    On MySQL, ``Customer.objects.bulk_create()`` leaves ``pk=None``
+    on the returned objects, while SQLite fills them in — so SQLite
+    hid this bug and MySQL CI failed with ``ValueError:
+    bulk_create() prohibited to prevent data loss due to unsaved
+    related object 'customer'`` when those customers were then used
+    for Invoice/Payment rows. This test simulates the MySQL
+    behaviour on SQLite by stripping the PKs off the objects
+    ``bulk_create`` returns, so the bug is caught here too.
+    """
+    original_bulk_create = Customer.objects.bulk_create
+
+    def mysql_like_bulk_create(objs, *args, **kwargs):
+        result = original_bulk_create(objs, *args, **kwargs)
+        for obj in result:
+            obj.pk = None
+        return result
+
+    monkeypatch.setattr(
+        Customer.objects, "bulk_create", mysql_like_bulk_create
+    )
+    run = connector.sync(full=True)
+    assert run.status == "succeeded"
+    assert run.records_created == 5
+    assert Invoice.objects.count() == 3
+    assert Payment.objects.count() == 2
+    assert all(inv.customer_id is not None for inv in Invoice.objects.all())
+    assert all(pay.customer_id is not None for pay in Payment.objects.all())
+
+
+@pytest.mark.django_db
 def test_second_sync_while_one_is_active_is_refused(connector):
     ConnectorSyncRun.objects.create(
         connector_name="mock",

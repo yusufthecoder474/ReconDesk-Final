@@ -3,36 +3,36 @@
     "mode": "per-row",
     "records": 1000,
     "created": 1000,
-    "seconds": 1.4,
-    "queries": 3520,
-    "rows_per_second": 714.3,
+    "seconds": 1.348,
+    "queries": 3522,
+    "rows_per_second": 741.6,
     "queries_per_record": 3.52
   },
   {
     "mode": "bulk",
     "records": 1000,
     "created": 1000,
-    "seconds": 0.113,
-    "queries": 32,
-    "rows_per_second": 8820.3,
+    "seconds": 0.114,
+    "queries": 34,
+    "rows_per_second": 8759.0,
     "queries_per_record": 0.03
   },
   {
     "mode": "per-row",
     "records": 10000,
     "created": 10000,
-    "seconds": 13.935,
-    "queries": 35083,
-    "rows_per_second": 717.6,
+    "seconds": 13.545,
+    "queries": 35085,
+    "rows_per_second": 738.3,
     "queries_per_record": 3.51
   },
   {
     "mode": "bulk",
     "records": 10000,
     "created": 10000,
-    "seconds": 1.238,
-    "queries": 203,
-    "rows_per_second": 8075.7,
+    "seconds": 1.19,
+    "queries": 205,
+    "rows_per_second": 8406.6,
     "queries_per_record": 0.02
   }
 ]
